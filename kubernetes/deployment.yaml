@@ -26,10 +26,17 @@ spec:
         runAsGroup: 10001
         seccompProfile:
           type: RuntimeDefault
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 128Mi
       containers:
         - name: capstone01-app
           image: REPLACE_WITH_APPROVED_DIGEST_PINNED_ECR_IMAGE
           imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           ports:
             - name: http
               containerPort: 8080
