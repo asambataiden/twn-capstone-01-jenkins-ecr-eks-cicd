@@ -1,0 +1,11 @@
+.git
+.github
+.idea
+.vscode
+docs
+kubernetes
+src
+*.md
+*.log
+target/*
+!target/capstone01-app.jar
