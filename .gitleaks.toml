@@ -1,0 +1,15 @@
+title = "Capstone 01 — repository secret scan"
+
+[extend]
+useDefault = true
+
+# Reviewed false positive: ADR line documents the Jenkins credential ID,
+# not the value of an AWS access key or other secret.
+# Restrict suppression to one Gitleaks rule, file, and exact identifier.
+[[allowlists]]
+description = "Non-secret Jenkins credential identifier in access-separation ADR"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^docs/adr/0001-separate-publish-and-deploy-access\.md$''']
+regexTarget = "secret"
+regexes = ['''^aws-twn-capstone01-ecr-publisher$''']
