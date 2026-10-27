@@ -1,0 +1,96 @@
+
+@Library('twn-devops-bootcamp-jenkins-shared-library@feat/library-foundation') _
+
+pipeline {
+    agent { label 'docker-ecr-publisher' }
+
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        timestamps()
+        timeout(time: 15, unit: 'MINUTES')
+    }
+
+    parameters {
+        booleanParam(
+            name: 'ALLOW_EKS_DEPLOY',
+            defaultValue: false,
+            description: 'Explicitly authorize deployment to EKS'
+        )
+
+        string(
+            name: 'IMAGE_DIGEST',
+            defaultValue: 'sha256:4b46edf007cb4ddc07d9c4004a8678d59c29c365be6f50d6aeb8ff433a516c78',
+            description: 'Immutable Amazon ECR image digest'
+        )
+    }
+
+    environment {
+        AWS_ACCOUNT_ID = '591132357918'
+        AWS_REGION = 'eu-north-1'
+        EKS_CLUSTER = 'floral-mongoose-1792497995'
+        K8S_NAMESPACE = 'capstone-01'
+        K8S_DEPLOYMENT = 'capstone01-app'
+        K8S_CONTAINER = 'app'
+        ECR_REPOSITORY = 'twn-capstone-01/capstone01-app'
+    }
+
+    stages {
+        stage('Validate Deployment Request') {
+            steps {
+                script {
+                    if (!params.ALLOW_EKS_DEPLOY) {
+                        error('EKS deployment not authorized')
+                    }
+
+                    String digest = params.IMAGE_DIGEST.trim()
+
+                    if (!(digest ==~ /sha256:[a-f0-9]{64}/)) {
+                        error('Invalid image digest')
+                    }
+
+                    env.DEPLOY_IMAGE =
+                        "${env.AWS_ACCOUNT_ID}.dkr.ecr.${env.AWS_REGION}.amazonaws.com/" +
+                        "${env.ECR_REPOSITORY}@${digest}"
+
+                    echo "Cluster: ${env.EKS_CLUSTER}"
+                    echo "Namespace: ${env.K8S_NAMESPACE}"
+                    echo "Deployment: ${env.K8S_DEPLOYMENT}"
+                    echo "Image: ${env.DEPLOY_IMAGE}"
+                }
+
+                input(
+                    message: 'Approve deployment to Capstone 01 EKS?',
+                    ok: 'Approve EKS deployment'
+                )
+            }
+        }
+
+        stage('Deploy and Verify EKS') {
+            steps {
+                script {
+                    withCredentials([[
+                        $class: 'AmazonWebServicesCredentialsBinding',
+                        credentialsId: 'aws-twn-capstone01-eks-deployer'
+                    ]]) {
+                        eksDeployVerified(
+                            accountId: env.AWS_ACCOUNT_ID,
+                            region: env.AWS_REGION,
+                            cluster: env.EKS_CLUSTER,
+                            namespace: env.K8S_NAMESPACE,
+                            deployment: env.K8S_DEPLOYMENT,
+                            container: env.K8S_CONTAINER,
+                            image: env.DEPLOY_IMAGE
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "EKS deployment result: ${currentBuild.currentResult}"
+        }
+    }
+}
