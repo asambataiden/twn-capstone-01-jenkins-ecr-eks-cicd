@@ -6,7 +6,7 @@
  * Jenkins Global Pipeline Libraries must configure the referenced library.
  */
 pipeline {
-    agent { label 'docker-aws-kubectl' }
+    agent any
     options {
         skipDefaultCheckout(true)
         disableConcurrentBuilds()
