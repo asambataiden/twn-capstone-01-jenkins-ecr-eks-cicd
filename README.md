@@ -4,7 +4,7 @@
 
 A hands-on CI/CD implementation for a Java/Spring Boot service: test with Maven, build a non-root Docker image, publish to private Amazon ECR with immutable Git-based tags, then deploy an exact SHA-256 image digest to a pre-existing Amazon EKS cluster with Jenkins and a reusable Shared Library.
 
-**Status: End-to-end build → ECR publish → EKS rollout verified on 27 October 2026.** This is a learning sandbox, not a production-hardened service. The EKS cluster and worker nodes are pre-existing; this repository does not create them.
+**Status: End-to-end build → ECR publish → EKS rollout, plus Terraform import and drift-free plan verified on 27 October 2026.** This is a learning sandbox, not a production-hardened service. The EKS cluster and worker nodes are pre-existing; this repository does not create them.
 
 ## Architecture
 
@@ -49,6 +49,9 @@ The Shared Library implements `mavenVerify`, `mavenBuild`, `ecrBuild`, `ecrPush`
 | `k8s/capstone01-app.yaml` | Existing Deployment and internal ClusterIP Service |
 | `k8s/jenkins-deployer-rbac.yaml` | Namespace-specific Jenkins Role and RoleBinding |
 | `scripts/audit-capstone01.sh` | Read-only AWS/EKS configuration and workload audit |
+| `terraform/` | Imported IAM/EKS access resources, variables, import blocks, and encrypted S3 remote-state backend |
+| `terraform/bootstrap-state/` | Separate Terraform root for the secure, versioned state bucket |
+| `terraform/README.md` | IaC adoption evidence, operational procedures, and security limitations |
 | `docs/ci-cd-release-runbook.md` | Release procedure, validation and learning notes |
 | `pom.xml`, `src/` | Java application and tests |
 | `Dockerfile` | Container image with non-root process |
@@ -94,7 +97,7 @@ kubectl diff -f k8s/capstone01-app.yaml
 kubectl diff -f k8s/jenkins-deployer-rbac.yaml
 ```
 
-Do not automatically apply these files to a shared cluster without reviewing the diff. **IAM identities, policies and EKS access entries were configured outside this repository and are not yet managed by Terraform.** Rebuilding the *whole infrastructure* from this repository alone is therefore not yet supported. Terraform adoption/import is tracked as a follow-up, not presented as finished.
+Do not automatically apply these files to a shared cluster without reviewing the diff. **Terraform adopted the existing EKS deployer IAM user, managed policy, attachment, and EKS access entry on 27 October 2026** (4 imported, 0 added, 0 changed, 0 destroyed). A subsequent plan confirmed no drift. Their state is held in a private, encrypted, versioned S3 bucket with native lock-file locking. See [Terraform adoption runbook](terraform/README.md). The EKS cluster, worker nodes, ECR repository, publisher IAM resources, Jenkins server, and Kubernetes manifests are **not** provisioned or fully managed by this Terraform configuration; rebuilding the entire environment from this repository alone is not supported.
 
 ## Security design and trade-offs
 
@@ -133,7 +136,7 @@ Do not automatically apply these files to a shared cluster without reviewing the
 
 ## Next improvements
 
-- Adopt existing IAM/EKS access resources through reviewed Terraform imports and state management; **never recreate the live cluster casually**.
+- Extend IaC coverage deliberately (only where useful), including a least-privilege remote-state role and bootstrap-state recovery; **never recreate the live cluster casually**.
 - Add automated post-deployment HTTP smoke testing, release evidence collection and tested rollback procedures.
 - Replace long-lived IAM keys with short-lived credentials and secure Jenkins with HTTPS.
 - Pin and scan container base images and modernize the Docker BuildKit/buildx invocation.
