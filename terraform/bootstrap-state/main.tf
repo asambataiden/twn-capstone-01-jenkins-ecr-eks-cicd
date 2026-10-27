@@ -94,8 +94,8 @@ data "aws_iam_policy_document" "require_tls" {
 }
 
 resource "aws_s3_bucket_policy" "require_tls" {
-  bucket = aws_s3_bucket.state.id
-  policy = data.aws_iam_policy_document.require_tls.json
+  bucket     = aws_s3_bucket.state.id
+  policy     = data.aws_iam_policy_document.require_tls.json
   depends_on = [aws_s3_bucket_public_access_block.state]
 }
 
