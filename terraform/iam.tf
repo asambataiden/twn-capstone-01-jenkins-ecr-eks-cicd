@@ -4,6 +4,10 @@ resource "aws_iam_user" "eks_deployer" {
 
   lifecycle {
     prevent_destroy = true
+    # Import-only: preserve existing legacy user tags without encoding
+    # an access-key-like tag identifier in source control.
+    # Remove only after a separately reviewed tag remediation.
+    ignore_changes = [tags]
   }
 }
 
