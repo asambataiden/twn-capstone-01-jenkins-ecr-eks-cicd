@@ -1,21 +1,20 @@
-# Adoption only: imports existing AWS resources into Terraform state.
-# Review the plan carefully; do not apply changes other than the four expected imports.
+# Existing-resource adoption only. Review the full plan before any apply.
 import {
   to = aws_iam_user.eks_deployer
-  id = "twn-capstone01-eks-deployer"
+  id = var.eks_deployer_user_name
 }
 
 import {
   to = aws_iam_policy.eks_deployer
-  id = "arn:aws:iam::591132357918:policy/TWNCapstone01EKSDeployer"
+  id = local.deployer_policy_arn
 }
 
 import {
   to = aws_iam_user_policy_attachment.eks_deployer
-  id = "twn-capstone01-eks-deployer/arn:aws:iam::591132357918:policy/TWNCapstone01EKSDeployer"
+  id = "${var.eks_deployer_user_name}/${local.deployer_policy_arn}"
 }
 
 import {
   to = aws_eks_access_entry.eks_deployer
-  id = "floral-mongoose-1792497995:arn:aws:iam::591132357918:user/twn-capstone01-eks-deployer"
+  id = "${var.eks_cluster_name}:${local.deployer_user_arn}"
 }
