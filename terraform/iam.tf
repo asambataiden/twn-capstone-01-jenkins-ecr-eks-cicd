@@ -1,6 +1,7 @@
 resource "aws_iam_user" "eks_deployer" {
-  name = "twn-capstone01-eks-deployer"
+  name = var.eks_deployer_user_name
   path = "/"
+
   lifecycle {
     prevent_destroy = true
   }
@@ -11,14 +12,15 @@ data "aws_iam_policy_document" "eks_deployer" {
     sid       = "DescribeCapstoneEKSCluster"
     effect    = "Allow"
     actions   = ["eks:DescribeCluster"]
-    resources = ["arn:aws:eks:eu-north-1:591132357918:cluster/floral-mongoose-1792497995"]
+    resources = [local.cluster_arn]
   }
 }
 
 resource "aws_iam_policy" "eks_deployer" {
-  name   = "TWNCapstone01EKSDeployer"
+  name   = var.eks_deployer_policy_name
   path   = "/"
   policy = data.aws_iam_policy_document.eks_deployer.json
+
   lifecycle {
     prevent_destroy = true
   }
