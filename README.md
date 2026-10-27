@@ -44,8 +44,11 @@ The Shared Library implements `mavenVerify`, `mavenBuild`, `ecrBuild`, `ecrPush`
 
 | File | Purpose |
 | --- | --- |
-| `Jenkinsfile.ecr` | Approved build, test, ECR publish, optional EKS rollout |
-| `Jenkinsfile.deploy` | Independently deploy an existing immutable ECR digest |
+| `Jenkinsfile.ecr` | **Verified canonical release pipeline:** build, test, immutable ECR publish, optional EKS rollout |
+| `Jenkinsfile.deploy` | Verified independent deployment of an existing immutable ECR digest |
+| `Jenkinsfile.ci` | Earlier local-only CI exercise; not the tested integrated release path |
+| `Jenkinsfile` | Earlier candidate pipeline with different agent, repository, namespace and container names; not validated for this release |
+| `kubernetes/` | Legacy example manifests (2 replicas, Service 80, placeholder image); **not** the live deployment source of truth |
 | `k8s/capstone01-app.yaml` | Existing Deployment and internal ClusterIP Service |
 | `k8s/jenkins-deployer-rbac.yaml` | Namespace-specific Jenkins Role and RoleBinding |
 | `scripts/audit-capstone01.sh` | Read-only AWS/EKS configuration and workload audit |
@@ -55,6 +58,8 @@ The Shared Library implements `mavenVerify`, `mavenBuild`, `ecrBuild`, `ecrPush`
 | `docs/ci-cd-release-runbook.md` | Release procedure, validation and learning notes |
 | `pom.xml`, `src/` | Java application and tests |
 | `Dockerfile` | Container image with non-root process |
+
+**Canonical Kubernetes manifests:** Use `k8s/capstone01-app.yaml` and `k8s/jenkins-deployer-rbac.yaml`. The older `kubernetes/deployment.yaml` and `kubernetes/service.yaml` use different settings, are retained only as historical examples, and must not be applied to the verified environment without an intentional, reviewed migration.
 
 ## CI/CD jobs and approvals
 
