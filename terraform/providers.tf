@@ -1,4 +1,4 @@
 provider "aws" {
-  region = "eu-north-1"
-  allowed_account_ids = ["591132357918"]
+  region              = var.aws_region
+  allowed_account_ids = [var.aws_account_id]
 }
