@@ -13,36 +13,31 @@ The EKS cluster, workers, ECR repository, Jenkins and Kubernetes manifests are *
 
 ## Security and ownership
 
-Use your approved AWS profile with access to **591132357918**. Terraform state can contain sensitive information; keep it out of Git and protect it with filesystem permissions. The initial plan uses local state as a training exercise. Before adopting live resources into **persistent** management, configure an access-controlled, encrypted, versioned remote state backend with locking, and agree on who owns the state. Do not run the same configuration concurrently from different machines.
+Use your approved AWS profile with access to **591132357918**. Terraform state can contain sensitive information; keep it out of Git and protect it with filesystem permissions. The main Terraform root already uses an encrypted, versioned S3 remote backend with native lockfile locking; the separate S3 bucket bootstrap root retains local state. Only authorized operators should hold backend write permissions. Do not run the same configuration concurrently from different machines. Do not run the same configuration concurrently from different machines.
 
 Terraform source includes `prevent_destroy` for the user, policy and access entry; this is a guardrail but not a substitute for reviewing plans.
 
-## Safe preparation (Mac terminal, repository root)
+## Current operating procedure — remote state configured
+
+The adoption completed on 2026-10-27. This configuration now uses the committed `backend.tf` pointing to the encrypted, private, versioned S3 bucket; **do not use `terraform init -backend=false` for routine operations**.
+
+From the repository root, with an authorized AWS profile:
 
 ```bash
 export AWS_PROFILE=asambataiden-dev
 export AWS_REGION=eu-north-1
-aws sts get-caller-identity
-git pull --ff-only origin feat/jenkins-ecr-eks-pipeline
-
 cd terraform
-umask 077
+terraform init
 terraform fmt -check -recursive
-terraform init -backend=false
 terraform validate
-terraform plan -input=false -out=adoption.tfplan
-terraform show adoption.tfplan
+terraform plan -input=false -detailed-exitcode
 ```
 
-`terraform init -backend=false` prepares providers without configuring remote state. `terraform plan` reads AWS and creates a **local plan file**, but should not mutate cloud resources. Do **not** run `terraform apply` yet.
+A plan exit code of 0 means no difference, 2 indicates a proposed change and 1 an error. Review any changes; do not automatically apply them.
 
-## Acceptance criteria
+The `imports.tf` blocks record how these existing resources were adopted. With imported resources already present in state, future plans should not repeat imports. If state is lost or ownership is transferred, recover through a reviewed state-management procedure rather than deleting AWS resources.
 
-The plan must show **exactly four import operations** and **zero creates, updates, replacements or destroys**. Imported resource attributes and access-entry group must match the AWS inventory. Any proposed mutation is a stop-and-investigate event. Provider defaults or policy JSON normalization can surface differences; never blindly accept them.
-
-The Terraform dependency lock file (`.terraform.lock.hcl`) should be committed after provider selection. Keep `.terraform/`, `*.tfstate*` and `*.tfplan` out of Git.
-
-**Stop after `terraform show adoption.tfplan` and review the output.** A later approved import apply writes Terraform state and may invoke AWS APIs; manage state carefully and retain evidence. Prefer proper remote state before that step.
+The separate `bootstrap-state/` Terraform root provisions the S3 state bucket and is currently backed by **local state**. Preserve its encrypted backup in a protected location; never commit state or saved plans. Use the separately committed provider lock files in both Terraform roots.
 
 ## Recovery and troubleshooting
 
