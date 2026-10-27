@@ -36,3 +36,21 @@ docker run --rm --read-only -p 8080:8080 capstone01-app:local
 From a second terminal, test `curl --fail http://localhost:8080/api/status` and `curl --fail http://localhost:8080/actuator/health`. Stop Docker with Ctrl+C.
 
 For the first Jenkins test, use a **nonprivileged agent** and `PUBLISH_AND_DEPLOY=false`, and collect the actual Jenkins log and build URL.
+
+
+## First Jenkins job: build-only validation (Phase 10.1)
+
+Use `Jenkinsfile.ci` for the **first** execution, not the release-oriented `Jenkinsfile`. It has no calls to AWS, Amazon ECR, `kubectl`, or deployment functions. It still performs a local Docker image build.
+
+1. Install/configure Jenkins Pipeline, Git, and the Pipeline: Groovy Libraries support (check versions against your Jenkins LTS and plugins).
+2. In **Manage Jenkins → System → Global Pipeline Libraries**, configure library name `twn-devops-bootcamp-jenkins-shared-library` with Git source `https://github.com/asambataiden/twn-devops-bootcamp-jenkins-shared-library.git` (or SSH with scoped read credentials). Make sure the library can resolve branch `feat/library-foundation`. Disable implicit loading if not required.
+3. Configure a Maven tool named `maven-3.9` in **Manage Jenkins → Tools**, or adjust that name in the Jenkinsfile to your actual installation.
+4. Set up a reviewed, trusted and isolated build worker with a label `docker-aws-kubectl` and working Java 17+, Maven, Git, and Docker daemon access. Despite the label, **no AWS permissions are required for this job**. Avoid giving this initial worker AWS role credentials. Jenkins' Docker permissions are highly privileged; use an isolated worker.
+5. Create **New Item → Pipeline** (e.g. `twn-capstone-01-build-only`).
+6. Under **Pipeline → Definition**, select **Pipeline script from SCM**; SCM **Git**; repository URL `https://github.com/asambataiden/twn-capstone-01-jenkins-ecr-eks-cicd.git` or the configured SSH alias/credentials; branch specifier `*/feat/jenkins-ecr-eks-pipeline`; **Script Path** `Jenkinsfile.ci`.
+7. Save and select **Build Now**. Check the Console Output and confirm the build executed `mavenVerify()`, `mavenBuild(skipTests: true)`, and the local-only Docker image build.
+8. Save the Jenkins build URL, console outcome, source commit SHA and test reports as evidence. Do not claim success before execution.
+
+Potential setup issues: missing worker label means Jenkins will queue indefinitely; unknown `maven-3.9` causes a tool error; missing Shared Library or library Git checkout blocks pipeline compilation; Maven test failures stop packaging; Docker daemon permissions may block the final stage.
+
+Once the build-only run is green, assess Jenkins version/plugin compatibility, branch trust and short-lived AWS identity before testing the separate release pipeline.
