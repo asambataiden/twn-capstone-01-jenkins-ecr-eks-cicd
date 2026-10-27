@@ -1,8 +1,8 @@
 @Library('twn-devops-bootcamp-jenkins-shared-library@feat/library-foundation') _
 
 /**
- * Manually triggered ECR integration candidate — NO EKS deployment.
- * Requires a dedicated, trusted Jenkins worker with short-lived AWS identity.
+ * Manually approved ECR publishing, with optional verified EKS deployment.
+ * Uses distinct, restricted Jenkins AWS credentials for publishing and deployment.
  * The job must not be exposed to untrusted PRs or public build permissions.
  */
 pipeline {
@@ -19,6 +19,8 @@ pipeline {
     parameters {
         booleanParam(name: 'ALLOW_ECR_PUBLISH', defaultValue: false,
             description: 'Only enable after verifying the approved AWS test account and immutable ECR repository')
+        booleanParam(name: 'ALLOW_EKS_DEPLOY', defaultValue: false,
+            description: 'After successful publishing, separately approve deployment into existing capstone-01 EKS namespace')
         string(name: 'AWS_ACCOUNT_ID', defaultValue: '',
             description: 'Explicit 12-digit approved AWS account ID')
         string(name: 'AWS_REGION', defaultValue: '',
@@ -44,7 +46,7 @@ pipeline {
                     }
                     echo "Publishing target: ${params.AWS_ACCOUNT_ID} / ${params.AWS_REGION} / ${params.ECR_REPOSITORY}"
                 }
-                input message: 'Confirm approved sandbox ECR publishing target and short-lived AWS credentials?',
+                input message: 'Confirm approved sandbox ECR publishing target and dedicated publisher credentials?',
                       ok: 'Approve ECR publication'
             }
         }
@@ -104,6 +106,7 @@ pipeline {
                         tag: env.IMAGE_TAG
                     )
                     echo "Published immutable image reference: ${digestRef}"
+                    env.PUBLISHED_DIGEST_REFERENCE = digestRef
                     writeFile file: 'ecr-image-reference.txt', text: digestRef + '\n'
                     archiveArtifacts artifacts: 'ecr-image-reference.txt',
                         allowEmptyArchive: false, fingerprint: true
@@ -111,10 +114,50 @@ pipeline {
                 }
             }
         }
+        stage('Approve EKS deployment') {
+            when { expression { return params.ALLOW_EKS_DEPLOY } }
+            steps {
+                script {
+                    if (params.AWS_ACCOUNT_ID != '591132357918' ||
+                        params.AWS_REGION != 'eu-north-1' ||
+                        params.ECR_REPOSITORY != 'twn-capstone-01/capstone01-app') {
+                        error('EKS deployment allowed only for the approved Capstone 01 registry target')
+                    }
+                    String prefix = '591132357918.dkr.ecr.eu-north-1.amazonaws.com/twn-capstone-01/capstone01-app@sha256:'
+                    String image = env.PUBLISHED_DIGEST_REFERENCE ?: ''
+                    if (!image.startsWith(prefix) || !(image.substring(prefix.length()) ==~ /[0-9a-f]{64}/)) {
+                        error('Missing or invalid published immutable ECR digest reference')
+                    }
+                    echo "Approved deployment target: floral-mongoose-1792497995 / capstone-01 / capstone01-app"
+                    echo "Published image: ${image}"
+                }
+                input message: 'Approve deploying this published digest to the existing Capstone 01 EKS Deployment?',
+                      ok: 'Approve verified EKS rollout'
+            }
+        }
+        stage('Deploy published digest and verify rollout') {
+            when { expression { return params.ALLOW_EKS_DEPLOY } }
+            steps {
+                script {
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                      credentialsId: 'aws-twn-capstone01-eks-deployer']]) {
+                        eksDeployVerified(
+                            accountId: '591132357918',
+                            region: 'eu-north-1',
+                            cluster: 'floral-mongoose-1792497995',
+                            namespace: 'capstone-01',
+                            deployment: 'capstone01-app',
+                            container: 'app',
+                            image: env.PUBLISHED_DIGEST_REFERENCE
+                        )
+                    }
+                }
+            }
+        }
     }
     post {
         always {
-            echo "ECR integration candidate finished: ${currentBuild.currentResult}"
+            echo "Capstone 01 ECR/EKS pipeline finished: ${currentBuild.currentResult}"
         }
     }
 }
