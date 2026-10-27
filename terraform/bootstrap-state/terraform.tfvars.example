@@ -1,0 +1,3 @@
+aws_account_id   = "591132357918"
+aws_region       = "eu-north-1"
+state_bucket_name = "twn-capstone01-tfstate-591132357918-eu-north-1"
