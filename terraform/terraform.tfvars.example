@@ -1,0 +1,8 @@
+# Example overrides; copy to terraform.tfvars if you need a different approved target.
+# Keep the actual adopted resource IDs consistent with the existing import targets.
+aws_account_id           = "591132357918"
+aws_region               = "eu-north-1"
+eks_cluster_name         = "floral-mongoose-1792497995"
+eks_deployer_user_name   = "twn-capstone01-eks-deployer"
+eks_deployer_policy_name = "TWNCapstone01EKSDeployer"
+eks_deployer_group       = "twn-capstone01-deployers"

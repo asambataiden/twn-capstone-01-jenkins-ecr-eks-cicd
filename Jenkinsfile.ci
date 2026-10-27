@@ -1,0 +1,54 @@
+@Library('twn-devops-bootcamp-jenkins-shared-library@feat/library-foundation') _
+
+/**
+ * Safe first-run pipeline. No AWS/ECR/EKS calls, credentials or release parameters.
+ * Run only on a trusted Jenkins agent and only after reviewing this revision.
+ * Jenkins Global Pipeline Libraries must configure the referenced library.
+ */
+pipeline {
+    agent any
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        timestamps()
+        timeout(time: 20, unit: 'MINUTES')
+    }
+    tools {
+        maven 'maven-3.9'
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                sh 'git rev-parse HEAD'
+            }
+        }
+        stage('Verify Java application') {
+            steps {
+                mavenVerify()
+            }
+        }
+        stage('Package application') {
+            steps {
+                mavenBuild(skipTests: true)
+            }
+        }
+        stage('Docker build (local only)') {
+            steps {
+                sh(
+                    label: 'Build local-only image',
+                    script: '''#!/bin/sh
+set -eu
+docker build --pull --file Dockerfile --tag capstone01-app:jenkins-local .
+docker image inspect capstone01-app:jenkins-local >/dev/null
+'''
+                )
+            }
+        }
+    }
+    post {
+        always {
+            echo "Capstone 01 build-only pipeline result: ${currentBuild.currentResult}"
+        }
+    }
+}

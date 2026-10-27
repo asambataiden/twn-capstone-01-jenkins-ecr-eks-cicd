@@ -1,0 +1,36 @@
+# Namespace-scoped Jenkins deployer authorization.
+# Provision the EKS access entry separately and map the IAM principal to
+# Kubernetes group twn-capstone01-deployers.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: capstone01-deployer
+  namespace: capstone-01
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["capstone01-app"]
+    verbs: ["get", "patch", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["list"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: capstone01-deployer
+  namespace: capstone-01
+subjects:
+  - kind: Group
+    name: twn-capstone01-deployers
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: capstone01-deployer
+  apiGroup: rbac.authorization.k8s.io

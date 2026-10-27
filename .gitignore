@@ -14,3 +14,14 @@ coverage/
 *.key
 kubeconfig
 .kube/
+
+# Terraform working data and local state (never commit)
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/crash.log
+**/crash.*.log
+**/*.tfplan
+**/plan.out
+**/*.tfvars
+**/*.tfvars.json

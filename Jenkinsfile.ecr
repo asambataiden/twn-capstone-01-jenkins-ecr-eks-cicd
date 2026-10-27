@@ -1,0 +1,163 @@
+@Library('twn-devops-bootcamp-jenkins-shared-library@feat/library-foundation') _
+
+/**
+ * Manually approved ECR publishing, with optional verified EKS deployment.
+ * Uses distinct, restricted Jenkins AWS credentials for publishing and deployment.
+ * The job must not be exposed to untrusted PRs or public build permissions.
+ */
+pipeline {
+    agent { label 'docker-ecr-publisher' }
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        timestamps()
+        timeout(time: 40, unit: 'MINUTES')
+    }
+    tools {
+        maven 'maven-3.9'
+    }
+    parameters {
+        booleanParam(name: 'ALLOW_ECR_PUBLISH', defaultValue: false,
+            description: 'Only enable after verifying the approved AWS test account and immutable ECR repository')
+        booleanParam(name: 'ALLOW_EKS_DEPLOY', defaultValue: false,
+            description: 'After successful publishing, separately approve deployment into existing capstone-01 EKS namespace')
+        string(name: 'AWS_ACCOUNT_ID', defaultValue: '',
+            description: 'Explicit 12-digit approved AWS account ID')
+        string(name: 'AWS_REGION', defaultValue: '',
+            description: 'Explicit approved AWS region, e.g. eu-north-1')
+        string(name: 'ECR_REPOSITORY', defaultValue: '',
+            description: 'Existing approved immutable ECR repository path')
+    }
+    stages {
+        stage('Review release target') {
+            steps {
+                script {
+                    if (!params.ALLOW_ECR_PUBLISH) {
+                        error('No publish authorization: ALLOW_ECR_PUBLISH must be explicitly enabled')
+                    }
+                    if (!(params.AWS_ACCOUNT_ID ==~ /[0-9]{12}/)) {
+                        error('AWS_ACCOUNT_ID must contain exactly 12 digits')
+                    }
+                    if (!(params.AWS_REGION ==~ /[a-z]{2}(?:-[a-z]+)+-[0-9]+/)) {
+                        error('AWS_REGION has invalid format')
+                    }
+                    if (!(params.ECR_REPOSITORY ==~ /[a-z0-9]+(?:[._\/-][a-z0-9]+)*/)) {
+                        error('ECR_REPOSITORY has invalid format')
+                    }
+                    echo "Publishing target: ${params.AWS_ACCOUNT_ID} / ${params.AWS_REGION} / ${params.ECR_REPOSITORY}"
+                }
+                input message: 'Confirm approved sandbox ECR publishing target and dedicated publisher credentials?',
+                      ok: 'Approve ECR publication'
+            }
+        }
+        stage('Checkout') {
+            steps {
+                checkout scm
+                script {
+                    String revision = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+                    if (!(revision ==~ /[0-9a-f]{40}/)) {
+                        error('Cannot determine full source Git commit SHA')
+                    }
+                    env.IMAGE_TAG = "git-${revision}"
+                    echo "Building approved commit: ${revision}"
+                }
+            }
+        }
+        stage('Maven verify and package') {
+            steps {
+                mavenVerify()
+                mavenBuild(skipTests: true)
+            }
+        }
+        stage('Build image for ECR') {
+            steps {
+                script {
+                    env.IMAGE_REFERENCE = ecrBuild(
+                        accountId: params.AWS_ACCOUNT_ID,
+                        region: params.AWS_REGION,
+                        repository: params.ECR_REPOSITORY,
+                        tag: env.IMAGE_TAG
+                    )
+                }
+            }
+        }
+        stage('Publish immutable image') {
+            steps {
+                script {
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-twn-capstone01-ecr-publisher']]) {
+                        ecrPush(
+                        accountId: params.AWS_ACCOUNT_ID,
+                        region: params.AWS_REGION,
+                        repository: params.ECR_REPOSITORY,
+                        tag: env.IMAGE_TAG
+                        )
+                    }
+                }
+            }
+        }
+        stage('Resolve registry digest') {
+            steps {
+                script {
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-twn-capstone01-ecr-publisher']]) {
+                    String digestRef = ecrImageDigest(
+                        accountId: params.AWS_ACCOUNT_ID,
+                        region: params.AWS_REGION,
+                        repository: params.ECR_REPOSITORY,
+                        tag: env.IMAGE_TAG
+                    )
+                    echo "Published immutable image reference: ${digestRef}"
+                    env.PUBLISHED_DIGEST_REFERENCE = digestRef
+                    writeFile file: 'ecr-image-reference.txt', text: digestRef + '\n'
+                    archiveArtifacts artifacts: 'ecr-image-reference.txt',
+                        allowEmptyArchive: false, fingerprint: true
+                    }
+                }
+            }
+        }
+        stage('Approve EKS deployment') {
+            when { expression { return params.ALLOW_EKS_DEPLOY } }
+            steps {
+                script {
+                    if (params.AWS_ACCOUNT_ID != '591132357918' ||
+                        params.AWS_REGION != 'eu-north-1' ||
+                        params.ECR_REPOSITORY != 'twn-capstone-01/capstone01-app') {
+                        error('EKS deployment allowed only for the approved Capstone 01 registry target')
+                    }
+                    String prefix = '591132357918.dkr.ecr.eu-north-1.amazonaws.com/twn-capstone-01/capstone01-app@sha256:'
+                    String image = env.PUBLISHED_DIGEST_REFERENCE ?: ''
+                    if (!image.startsWith(prefix) || !(image.substring(prefix.length()) ==~ /[0-9a-f]{64}/)) {
+                        error('Missing or invalid published immutable ECR digest reference')
+                    }
+                    echo "Approved deployment target: floral-mongoose-1792497995 / capstone-01 / capstone01-app"
+                    echo "Published image: ${image}"
+                }
+                input message: 'Approve deploying this published digest to the existing Capstone 01 EKS Deployment?',
+                      ok: 'Approve verified EKS rollout'
+            }
+        }
+        stage('Deploy published digest and verify rollout') {
+            when { expression { return params.ALLOW_EKS_DEPLOY } }
+            steps {
+                script {
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding',
+                                      credentialsId: 'aws-twn-capstone01-eks-deployer']]) {
+                        eksDeployVerified(
+                            accountId: '591132357918',
+                            region: 'eu-north-1',
+                            cluster: 'floral-mongoose-1792497995',
+                            namespace: 'capstone-01',
+                            deployment: 'capstone01-app',
+                            container: 'app',
+                            image: env.PUBLISHED_DIGEST_REFERENCE
+                        )
+                    }
+                }
+            }
+        }
+    }
+    post {
+        always {
+            echo "Capstone 01 ECR/EKS pipeline finished: ${currentBuild.currentResult}"
+        }
+    }
+}
