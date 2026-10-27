@@ -82,18 +82,21 @@ pipeline {
         stage('Publish immutable image') {
             steps {
                 script {
-                    ecrPush(
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-twn-capstone01-ecr-publisher']]) {
+                        ecrPush(
                         accountId: params.AWS_ACCOUNT_ID,
                         region: params.AWS_REGION,
                         repository: params.ECR_REPOSITORY,
                         tag: env.IMAGE_TAG
-                    )
+                        )
+                    }
                 }
             }
         }
         stage('Resolve registry digest') {
             steps {
                 script {
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-twn-capstone01-ecr-publisher']]) {
                     String digestRef = ecrImageDigest(
                         accountId: params.AWS_ACCOUNT_ID,
                         region: params.AWS_REGION,
@@ -104,6 +107,7 @@ pipeline {
                     writeFile file: 'ecr-image-reference.txt', text: digestRef + '\n'
                     archiveArtifacts artifacts: 'ecr-image-reference.txt',
                         allowEmptyArchive: false, fingerprint: true
+                    }
                 }
             }
         }
