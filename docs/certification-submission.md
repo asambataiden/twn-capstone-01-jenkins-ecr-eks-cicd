@@ -12,9 +12,9 @@ This short summary provides a reviewer entry point; the main README and linked p
 
 ## Reviewer navigation
 
-- [`README.md`](../../README.md)
-- [`docs/ci-cd-release-runbook.md`](../../docs/ci-cd-release-runbook.md)
-- [`terraform/README.md`](../../terraform/README.md)
+- [`README.md`](../README.md)
+- [`docs/ci-cd-release-runbook.md`](../docs/ci-cd-release-runbook.md)
+- [`terraform/README.md`](../terraform/README.md)
 
 ## Verification qualification
 
